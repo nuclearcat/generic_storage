@@ -12,7 +12,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -36,6 +35,9 @@ type User struct {
 var config Config
 
 var cfg = flag.String("cfg", "", "Configuration file")
+
+// logging
+var logEnabled = flag.Bool("log", false, "Enable stdout logging")
 
 /*
 Intented to be used as a receiver for the HTTP POST request from the various tools
@@ -97,12 +99,18 @@ func handleFile(w http.ResponseWriter, r *http.Request, fieldname string, userna
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(err.Error()))
+		if *logEnabled {
+			log.Println("Error getting file from request:", err)
+		}
 		return false
 	}
 	defer file.Close()
 	if !validateFilename(fheader.Filename) {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("Invalid filename"))
+		if *logEnabled {
+			log.Println("Invalid filename:", fheader.Filename)
+		}
 		return false
 	}
 
@@ -124,6 +132,9 @@ func handleFile(w http.ResponseWriter, r *http.Request, fieldname string, userna
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
+		if *logEnabled {
+			log.Println("Error creating file:", err)
+		}
 		return false
 	}
 	defer outputFile.Close()
@@ -133,6 +144,9 @@ func handleFile(w http.ResponseWriter, r *http.Request, fieldname string, userna
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
+		if *logEnabled {
+			log.Println("Error copying file:", err)
+		}
 		return false
 	}
 	return true
@@ -143,18 +157,38 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	// Verify token Authorization header with bearer token and just token
 	auth := r.Header.Get("Authorization")
 	// "Bearer " + token, split token from "Bearer " string
-	if len(auth) > 7 {
+	if len(auth) > 7 && auth[:7] == "Bearer " {
 		auth = auth[7:]
 		username = verifyToken(auth)
 		if username == "" {
 			w.WriteHeader(http.StatusUnauthorized)
 			w.Write([]byte("Unauthorized"))
+			if *logEnabled {
+				log.Println("NONKciAuth: Token not found")
+			}
 			return
 		}
 	} else {
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte("Unauthorized"))
-		return
+		if auth == "" {
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte("Unauthorized"))
+			if *logEnabled {
+				log.Println("KCIAuth: Token is empty")
+			}
+			return
+		}
+		// KernelCI token without "Bearer " prefix
+		username = verifyToken(auth)
+		if username == "" {
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte("Unauthorized"))
+			if *logEnabled {
+				log.Println("KCIAuth: Token not found")
+			}
+		}
+	}
+	if *logEnabled {
+		log.Println("Authorized user:", username)
 	}
 
 	// Parse the request body as a multipart form.
@@ -162,15 +196,25 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(err.Error()))
+		if *logEnabled {
+			log.Println("Error parsing multipart form:", err)
+		}
 		return
 	}
 
-	// iterate over fields file0, file1, file2, etc
-	for i := 0; i < 100; i++ {
-		fieldname := fmt.Sprintf("file%d", i)
-		// if field is not found, break
-		if r.MultipartForm.File[fieldname] == nil {
-			break
+	/*
+		// print all MultiPartForm fields
+		if *logEnabled {
+			for k, v := range r.MultipartForm.Value {
+				log.Println("Field:", k, v)
+			}
+		}
+	*/
+
+	// find all files in the request
+	for fieldname, v := range r.MultipartForm.File {
+		if *logEnabled {
+			log.Println("Uploading file:", fieldname, v[0].Filename, v[0].Size)
 		}
 		if !handleFile(w, r, fieldname, username) {
 			return
@@ -194,6 +238,10 @@ func main() {
 
 	// Create a handler for upload, any POST, rest just to serve files
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// IP, method, path
+		if *logEnabled {
+			log.Println(r.RemoteAddr, r.Method, r.URL.Path)
+		}
 		if r.Method == http.MethodPost {
 			handleUpload(w, r)
 		} else if r.Method == http.MethodGet {
