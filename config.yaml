@@ -1,0 +1,9 @@
+users:
+  - username: user1
+    token: 10BPPnSSqGzsX7WF
+
+  - username: user2
+    token: 10BPPnSSqGzsX7W1
+
+filedir: ./files
+
