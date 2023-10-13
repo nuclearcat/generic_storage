@@ -2,11 +2,11 @@
 Simple HTTP file server
 (c) Collabora Ltd 2023
 Author: Denys Fedoryshchenko <denys.f@collabora.com>
+SPDX-License-Identifier: LGPL-2.1-or-later
 
 TODO(nuclearcat): access.log to stdout (configurable)
 TODO(nuclearcat): limit file size
 TODO(nuclearcat): limit content type (no html, executables, malicious files)
-
 */
 package main
 
@@ -46,6 +46,11 @@ curl -X POST -H "Authorization: Bearer <token>" -F file0=@var.tar.gz file1=@x.bi
 
 func loadConfig() {
 	var yamlFile []byte
+
+	if *cfg == "" {
+		log.Fatal("No config file specified")
+	}
+
 	// Load YAML config file
 	yamlFile, err := ioutil.ReadFile(*cfg)
 	if err != nil {
@@ -94,6 +99,7 @@ func validateFilename(filename string) bool {
 Handle file upload
 */
 func handleFile(w http.ResponseWriter, r *http.Request, fieldname string, username string) bool {
+	var path string = ""
 	// Get the file from the request.
 	file, fheader, err := r.FormFile(fieldname)
 	if err != nil {
@@ -114,10 +120,29 @@ func handleFile(w http.ResponseWriter, r *http.Request, fieldname string, userna
 		return false
 	}
 
-	filename := config.FileDir + "/" + username + "/" + fheader.Filename
+	// if field path exist? (KernelCI uses it)
+	if _, ok := r.MultipartForm.Value["path"]; ok {
+		path = r.MultipartForm.Value["path"][0]
+		if len(path) > 0 && !validateFilename(path) {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Invalid path"))
+			if *logEnabled {
+				log.Println("Invalid path:", path)
+			}
+			return false
+		}
+		if len(path) > 0 {
+			path += "/"
+		}
+		if *logEnabled && len(path) > 0 {
+			log.Println("Path:", path)
+		}
+	}
+
+	filename := config.FileDir + "/" + username + "/" + path + fheader.Filename
 	// create missing directories for user if needed
-	if _, err := os.Stat(config.FileDir + "/" + username); os.IsNotExist(err) {
-		os.MkdirAll(config.FileDir+"/"+username, 0755)
+	if _, err := os.Stat(config.FileDir + "/" + username + "/" + path); os.IsNotExist(err) {
+		os.MkdirAll(config.FileDir+"/"+username+"/"+path, 0755)
 	}
 	// check if filename contain path, extract directory and create it if needed
 	// split filename by slash
