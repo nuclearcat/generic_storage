@@ -13,7 +13,6 @@ package main
 import (
 	"flag"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -52,7 +51,7 @@ func loadConfig() {
 	}
 
 	// Load YAML config file
-	yamlFile, err := ioutil.ReadFile(*cfg)
+	yamlFile, err := os.ReadFile(*cfg)
 	if err != nil {
 		log.Fatalf("Error reading YAML file: %v", err)
 	}
