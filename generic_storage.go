@@ -176,36 +176,29 @@ func handleFile(w http.ResponseWriter, r *http.Request, fieldname string, userna
 	return true
 }
 
-func handleUpload(w http.ResponseWriter, r *http.Request) {
+func doAuth(auth string) string {
 	var username string
-	// Verify token Authorization header with bearer token and just token
-	auth := r.Header.Get("Authorization")
+
 	// "Bearer " + token, split token from "Bearer " string
 	if len(auth) > 7 && auth[:7] == "Bearer " {
 		auth = auth[7:]
 		username = verifyToken(auth)
 		if username == "" {
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("Unauthorized"))
 			if *logEnabled {
 				log.Println("NONKciAuth: Token not found")
 			}
-			return
+			return ""
 		}
 	} else {
 		if auth == "" {
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("Unauthorized"))
 			if *logEnabled {
 				log.Println("KCIAuth: Token is empty")
 			}
-			return
+			return ""
 		}
 		// KernelCI token without "Bearer " prefix
 		username = verifyToken(auth)
 		if username == "" {
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("Unauthorized"))
 			if *logEnabled {
 				log.Println("KCIAuth: Token not found")
 			}
@@ -213,6 +206,21 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	if *logEnabled {
 		log.Println("Authorized user:", username)
+	}
+
+	return username
+}
+
+func handleUpload(w http.ResponseWriter, r *http.Request) {
+	var username string
+	// Verify token Authorization header with bearer token and just token
+	auth := r.Header.Get("Authorization")
+	username = doAuth(auth)
+	if username == "" {
+		// Return Not Authorized HTTP code
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte("Unauthorized"))
+		return
 	}
 
 	// Parse the request body as a multipart form.
