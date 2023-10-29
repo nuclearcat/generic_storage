@@ -22,8 +22,9 @@ import (
 )
 
 type Config struct {
-	Users   []User `yaml:"users"`
-	FileDir string `yaml:"filedir"`
+	Users     []User `yaml:"users"`
+	FileDir   string `yaml:"filedir"`
+	Overwrite bool   `yaml:"overwrite"`
 }
 
 type User struct {
@@ -149,6 +150,18 @@ func handleFile(w http.ResponseWriter, r *http.Request, fieldname string, userna
 	// if there is more than one element, create directory
 	if len(s) > 1 {
 		os.MkdirAll(s[0], 0755)
+	}
+
+	// check if file exists and if overwrite is enabled
+	if _, err := os.Stat(filename); err == nil {
+		if !config.Overwrite {
+			w.WriteHeader(http.StatusConflict)
+			w.Write([]byte("File already exists"))
+			if *logEnabled {
+				log.Println("File already exists:", filename)
+			}
+			return false
+		}
 	}
 
 	// Create a new file to write the uploaded file to.
