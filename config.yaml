@@ -7,3 +7,10 @@ users:
 
 filedir: ./files
 
+# You can disable overwrite, if you want to make sure initial upload integrity
+#overwrite: false
+
+# Write only mode, if you want to make sure no one can download your files,
+# for example, you want to use this as a backup tool, and you don't want to
+# expose your files to the public.
+#writeonly: false

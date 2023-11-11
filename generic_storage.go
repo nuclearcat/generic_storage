@@ -25,6 +25,7 @@ type Config struct {
 	Users     []User `yaml:"users"`
 	FileDir   string `yaml:"filedir"`
 	Overwrite bool   `yaml:"overwrite"`
+	WriteOnly bool   `yaml:"writeonly"`
 }
 
 type User struct {
@@ -46,6 +47,9 @@ curl -X POST -H "Authorization: Bearer <token>" -F file0=@var.tar.gz file1=@x.bi
 
 func loadConfig() {
 	var yamlFile []byte
+
+	// defaults
+	config.Overwrite = true
 
 	if *cfg == "" {
 		log.Fatal("No config file specified")
@@ -281,6 +285,16 @@ func main() {
 	// load config
 	loadConfig()
 
+	// print config options
+	if *logEnabled {
+		log.Println("FileDir:", config.FileDir)
+		log.Println("WriteOnly:", config.WriteOnly)
+		log.Println("Overwrite:", config.Overwrite)
+		for _, user := range config.Users {
+			log.Println("User:", user.Username, " Token: hidden")
+		}
+	}
+
 	// Create a handler for upload, any POST, rest just to serve files
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// IP, method, path
@@ -290,6 +304,11 @@ func main() {
 		if r.Method == http.MethodPost {
 			handleUpload(w, r)
 		} else if r.Method == http.MethodGet {
+			if config.WriteOnly {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				w.Write([]byte("Method not allowed"))
+				return
+			}
 			http.FileServer(http.Dir(config.FileDir)).ServeHTTP(w, r)
 		} else {
 			w.WriteHeader(http.StatusMethodNotAllowed)
